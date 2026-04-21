@@ -22,7 +22,7 @@ export async function generateImage(content: string): Promise<Buffer> {
     response_format: 'url',
   });
 
-  const imageUrl = response.data[0]?.url;
+  const imageUrl = response.data?.[0]?.url;
   if (!imageUrl) {
     throw new Error('DALL-E 3 returned no image URL');
   }
