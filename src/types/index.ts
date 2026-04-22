@@ -35,7 +35,9 @@ export interface GenerateResult {
   content: string;
   imageUrl: string | null;
   status: PostStatus;
+  isScheduled: boolean;
   scheduledFor: string;
+  createdAt: Date;
 }
 
 export interface PublishResult {

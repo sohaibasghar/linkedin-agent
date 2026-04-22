@@ -35,39 +35,37 @@ export class PublishFailedError extends Error {
 export async function publishPost(postId: string): Promise<PublishResult> {
   const post = await db.query.posts.findFirst({ where: eq(posts.id, postId) });
 
-  if (!post) {
-    throw new PostNotFoundError(postId);
-  }
+  if (!post) throw new PostNotFoundError(postId);
 
   if (post.status !== 'DRAFT' && post.status !== 'APPROVED') {
     throw new InvalidPostStatusError(postId, post.status);
   }
 
   let linkedInPostId: string | null = null;
-  let errorMessage: string | null = null;
+  let errorMessage:   string | null = null;
   let success = false;
 
   try {
-    let result;
-    if (post.imageUrl) {
-      result = await publishImagePost(post.content, post.imageUrl);
-    } else {
-      result = await publishTextPost(post.content);
-    }
+    const result = post.imageUrl
+      ? await publishImagePost(post.content, post.imageUrl)
+      : await publishTextPost(post.content);
+
     linkedInPostId = result.linkedInPostId;
     success = true;
   } catch (apiError) {
-    // Try Playwright automation fallback
-    try {
-      const { publishViaAutomation } = await import('@/lib/linkedin/automation');
-      const fallbackResult = await publishViaAutomation(post.content);
-      linkedInPostId = fallbackResult.linkedInPostId;
-      success = true;
-    } catch (automationError) {
-      errorMessage =
-        apiError instanceof LinkedInAPIError
-          ? `API: ${apiError.message}; Automation: ${automationError instanceof Error ? automationError.message : String(automationError)}`
-          : String(apiError);
+    const isNoToken = apiError instanceof LinkedInAPIError && apiError.code === 'NO_TOKEN';
+
+    if (!isNoToken) {
+      try {
+        const { publishViaAutomation } = await import('../lib/linkedin/automation');
+        const fallbackResult = await publishViaAutomation(post.content);
+        linkedInPostId = fallbackResult.linkedInPostId;
+        success = true;
+      } catch (automationError) {
+        errorMessage = `API: ${apiError instanceof Error ? apiError.message : String(apiError)}; Automation: ${automationError instanceof Error ? automationError.message : String(automationError)}`;
+      }
+    } else {
+      errorMessage = (apiError as Error).message;
     }
   }
 
@@ -76,11 +74,12 @@ export async function publishPost(postId: string): Promise<PublishResult> {
   if (success && linkedInPostId) {
     await db
       .update(posts)
-      .set({ status: 'PUBLISHED', linkedInPostId, publishedAt: now, errorMessage: null })
+      .set({ status: 'PUBLISHED', linkedInPostId, publishedAt: now, errorMessage: null, updatedAt: now })
       .where(eq(posts.id, postId));
 
     await db.insert(publishLogs).values({
       postId,
+      userId:  post.userId,
       outcome: 'SUCCESS',
     });
 
@@ -88,12 +87,13 @@ export async function publishPost(postId: string): Promise<PublishResult> {
   } else {
     await db
       .update(posts)
-      .set({ status: 'FAILED', errorMessage })
+      .set({ status: 'FAILED', errorMessage, updatedAt: now })
       .where(eq(posts.id, postId));
 
     await db.insert(publishLogs).values({
       postId,
-      outcome: 'FAILURE',
+      userId:      post.userId,
+      outcome:     'FAILURE',
       errorDetail: errorMessage,
     });
 

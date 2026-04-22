@@ -1,4 +1,7 @@
-import { kv } from '@vercel/kv';
+import { cookies } from 'next/headers';
+import { db } from '@/lib/db/client';
+import { users } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 
 export class LinkedInAPIError extends Error {
   constructor(
@@ -11,17 +14,27 @@ export class LinkedInAPIError extends Error {
 }
 
 async function getAccessToken(): Promise<string> {
-  // Try KV first (set via /auth OAuth flow), fall back to env var
   try {
-    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-      const kvToken = await kv.get<string>('linkedin:access_token');
-      if (kvToken) return kvToken;
+    const cookieStore = cookies();
+
+    // 1. DB lookup via user_id cookie (primary — token always up to date)
+    const userId = cookieStore.get('li_user_id')?.value;
+    if (userId) {
+      const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+      if (user?.accessToken) return user.accessToken;
     }
+
+    // 2. li_token cookie fallback (older sessions before DB user record)
+    const cookieToken = cookieStore.get('li_token')?.value;
+    if (cookieToken) return cookieToken;
   } catch {
-    // KV unavailable — continue to env var
+    // cookies() unavailable outside request context — fall through
   }
+
+  // 3. Env var (for cron / CI)
   const envToken = process.env.LINKEDIN_ACCESS_TOKEN;
   if (envToken) return envToken;
+
   throw new LinkedInAPIError(
     'NO_TOKEN',
     'No LinkedIn access token found. Visit /auth to connect your account.'
@@ -51,14 +64,14 @@ async function getLinkedInPersonId(accessToken: string): Promise<string> {
 
 export async function publishTextPost(content: string): Promise<LinkedInPostResult> {
   const accessToken = await getAccessToken();
-  const personId = await getLinkedInPersonId(accessToken);
+  const personId    = await getLinkedInPersonId(accessToken);
 
   const body = {
-    author: `urn:li:person:${personId}`,
+    author:         `urn:li:person:${personId}`,
     lifecycleState: 'PUBLISHED',
     specificContent: {
       'com.linkedin.ugc.ShareContent': {
-        shareCommentary: { text: content },
+        shareCommentary:    { text: content },
         shareMediaCategory: 'NONE',
       },
     },
@@ -68,11 +81,11 @@ export async function publishTextPost(content: string): Promise<LinkedInPostResu
   };
 
   const res = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-    method: 'POST',
+    method:  'POST',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'LinkedIn-Version': '202304',
+      Authorization:               `Bearer ${accessToken}`,
+      'Content-Type':              'application/json',
+      'LinkedIn-Version':          '202304',
       'X-Restli-Protocol-Version': '2.0.0',
     },
     body: JSON.stringify(body),
@@ -92,27 +105,24 @@ export async function publishTextPost(content: string): Promise<LinkedInPostResu
 }
 
 export async function publishImagePost(
-  content: string,
+  content:  string,
   imageUrl: string
 ): Promise<LinkedInPostResult> {
   const accessToken = await getAccessToken();
-  const personId = await getLinkedInPersonId(accessToken);
+  const personId    = await getLinkedInPersonId(accessToken);
 
-  // Register image upload
   const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
-    method: 'POST',
+    method:  'POST',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
+      Authorization:      `Bearer ${accessToken}`,
+      'Content-Type':     'application/json',
       'LinkedIn-Version': '202304',
     },
     body: JSON.stringify({
       registerUploadRequest: {
-        recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-        owner: `urn:li:person:${personId}`,
-        serviceRelationships: [
-          { relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' },
-        ],
+        recipes:              ['urn:li:digitalmediaRecipe:feedshare-image'],
+        owner:                `urn:li:person:${personId}`,
+        serviceRelationships: [{ relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' }],
       },
     }),
   });
@@ -120,11 +130,8 @@ export async function publishImagePost(
   if (!registerRes.ok) return publishTextPost(content);
 
   const registerData = await registerRes.json();
-  const uploadUrl =
-    registerData.value?.uploadMechanism?.[
-      'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'
-    ]?.uploadUrl;
-  const assetId = registerData.value?.asset;
+  const uploadUrl    = registerData.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl;
+  const assetId      = registerData.value?.asset;
 
   if (!uploadUrl || !assetId) return publishTextPost(content);
 
@@ -133,21 +140,21 @@ export async function publishImagePost(
   const imageBuffer = await imageRes.arrayBuffer();
 
   const uploadRes = await fetch(uploadUrl, {
-    method: 'PUT',
+    method:  'PUT',
     headers: { Authorization: `Bearer ${accessToken}` },
-    body: imageBuffer,
+    body:    imageBuffer,
   });
 
   if (!uploadRes.ok) return publishTextPost(content);
 
   const postBody = {
-    author: `urn:li:person:${personId}`,
+    author:         `urn:li:person:${personId}`,
     lifecycleState: 'PUBLISHED',
     specificContent: {
       'com.linkedin.ugc.ShareContent': {
-        shareCommentary: { text: content },
+        shareCommentary:    { text: content },
         shareMediaCategory: 'IMAGE',
-        media: [{ status: 'READY', description: { text: 'Post image' }, media: assetId }],
+        media:              [{ status: 'READY', description: { text: 'Post image' }, media: assetId }],
       },
     },
     visibility: {
@@ -156,11 +163,11 @@ export async function publishImagePost(
   };
 
   const postRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-    method: 'POST',
+    method:  'POST',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'LinkedIn-Version': '202304',
+      Authorization:               `Bearer ${accessToken}`,
+      'Content-Type':              'application/json',
+      'LinkedIn-Version':          '202304',
       'X-Restli-Protocol-Version': '2.0.0',
     },
     body: JSON.stringify(postBody),

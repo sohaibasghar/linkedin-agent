@@ -1,5 +1,11 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { db } from '@/lib/db/client';
+import { users } from '@/lib/db/schema';
+
+
+const COOKIE_MAX_AGE = 60 * 24 * 60 * 60; // 60 days
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -7,30 +13,27 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get('error');
 
   if (error) {
-    return NextResponse.redirect(
-      new URL(`/auth?error=${encodeURIComponent(error)}`, request.url)
-    );
+    return NextResponse.redirect(new URL(`/auth?error=${encodeURIComponent(error)}`, request.url));
   }
-
   if (!code) {
     return NextResponse.redirect(new URL('/auth?error=no_code', request.url));
   }
 
-  const clientId = process.env.LINKEDIN_CLIENT_ID!;
+  const clientId     = process.env.LINKEDIN_CLIENT_ID!;
   const clientSecret = process.env.LINKEDIN_CLIENT_SECRET!;
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
-  const redirectUri = `${baseUrl}/api/auth/linkedin/callback`;
+  const baseUrl      = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
+  const redirectUri  = `${baseUrl}/api/auth/linkedin/callback`;
 
-  // Exchange code for tokens
+  // Exchange code for token
   const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'authorization_code',
+      grant_type:    'authorization_code',
       code,
-      client_id: clientId,
+      client_id:     clientId,
       client_secret: clientSecret,
-      redirect_uri: redirectUri,
+      redirect_uri:  redirectUri,
     }),
   });
 
@@ -41,24 +44,66 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const tokenData = await tokenRes.json();
-  const { access_token, expires_in, refresh_token } = tokenData;
+  const { access_token, expires_in, refresh_token } = await tokenRes.json();
 
-  // Store in KV if available
-  try {
-    if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-      await kv.set('linkedin:access_token', access_token, { ex: expires_in ?? 5184000 });
-      if (refresh_token) {
-        await kv.set('linkedin:refresh_token', refresh_token, { ex: 365 * 24 * 60 * 60 });
-      }
-    }
-  } catch {
-    // KV unavailable — token won't be persisted in KV
+  // Fetch LinkedIn profile
+  const profileRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+    headers: {
+      Authorization: `Bearer ${access_token}`,
+      'LinkedIn-Version': '202304',
+    },
+  });
+
+  if (!profileRes.ok) {
+    return NextResponse.redirect(new URL('/auth?error=profile_fetch_failed', request.url));
   }
 
-  const expiresAt = new Date(Date.now() + (expires_in ?? 5184000) * 1000).toISOString();
+  const profile = await profileRes.json();
+  const linkedinId = profile.sub as string;
+  const tokenExpiresAt = new Date(Date.now() + (expires_in ?? 5184000) * 1000);
 
-  return NextResponse.redirect(
-    new URL(`/auth?success=1&expires_at=${encodeURIComponent(expiresAt)}`, request.url)
-  );
+  // Atomic upsert — avoids race condition between concurrent OAuth callbacks
+  const [upserted] = await db
+    .insert(users)
+    .values({
+      linkedinId,
+      email:          profile.email   ?? null,
+      name:           profile.name    ?? null,
+      avatarUrl:      profile.picture ?? null,
+      accessToken:    access_token,
+      refreshToken:   refresh_token   ?? null,
+      tokenExpiresAt,
+    })
+    .onConflictDoUpdate({
+      target: users.linkedinId,
+      set: {
+        email:          profile.email   ?? null,
+        name:           profile.name    ?? null,
+        avatarUrl:      profile.picture ?? null,
+        accessToken:    access_token,
+        refreshToken:   refresh_token   ?? null,
+        tokenExpiresAt,
+        updatedAt:      new Date(),
+      },
+    })
+    .returning({ id: users.id });
+
+  const userId = upserted.id;
+
+  const response = NextResponse.redirect(new URL('/?connected=1', request.url));
+
+  const cookieOpts = {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path:     '/',
+    maxAge:   COOKIE_MAX_AGE,
+  };
+
+  response.cookies.set('li_authed',  '1',      cookieOpts);
+  response.cookies.set('li_user_id', userId,   cookieOpts);
+  // Keep li_token for backward-compat fallback in getAccessToken
+  response.cookies.set('li_token',   access_token, { ...cookieOpts, maxAge: expires_in ?? COOKIE_MAX_AGE });
+
+  return response;
 }

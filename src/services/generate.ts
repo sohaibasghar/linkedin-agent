@@ -1,21 +1,11 @@
 import { db } from '@/lib/db/client';
 import { posts } from '@/lib/db/schema';
-import { acquireLock } from '@/lib/kv/lock';
 import { generateTopic } from '@/lib/ai/topic';
 import { generateContent } from '@/lib/ai/content';
+import { generateImage } from '@/lib/ai/image';
+import { uploadBlob } from '@/lib/storage/blob';
 import type { GenerateResult } from '@/types';
 import { PostStatus } from '@/types';
-import { eq, and, lt } from 'drizzle-orm';
-
-export class DuplicateDateError extends Error {
-  constructor(
-    public readonly date: string,
-    public readonly existingPostId: string
-  ) {
-    super(`A post is already scheduled for ${date}`);
-    this.name = 'DuplicateDateError';
-  }
-}
 
 export class GenerationFailedError extends Error {
   constructor(message: string) {
@@ -24,92 +14,61 @@ export class GenerationFailedError extends Error {
   }
 }
 
+export interface GenerateOptions {
+  userId:     string;
+  date?:      string;
+  withImage?: boolean;
+  subject?:   string;
+}
+
 function todayUTC(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-export async function generatePost(date?: string): Promise<GenerateResult> {
-  const targetDate = date ?? todayUTC();
+export async function generatePost(options: GenerateOptions): Promise<GenerateResult> {
+  const targetDate = options.date ?? todayUTC();
 
-  // Acquire daily lock
-  const lock = await acquireLock(targetDate);
-  if (!lock.acquired) {
-    // Find existing post for this date
-    const existing = await db.query.posts.findFirst({
-      where: eq(posts.scheduledFor, targetDate),
-    });
-    throw new DuplicateDateError(targetDate, existing?.id ?? 'unknown');
-  }
-
-  let topic: string;
+  let topic:   string;
   let content: string;
 
   try {
-    topic = await generateTopic();
+    topic   = options.subject?.trim() || await generateTopic();
     content = await generateContent(topic);
   } catch (err) {
     throw new GenerationFailedError(err instanceof Error ? err.message : String(err));
   }
 
-  const autoPublish = process.env.AUTO_PUBLISH === 'true';
-  const imageGenEnabled = process.env.IMAGE_GENERATION === 'true';
-
   let imageUrl: string | null = null;
 
-  if (imageGenEnabled) {
+  if (options.withImage) {
     try {
-      const { generateImage } = await import('@/lib/ai/image');
-      const { uploadBlob } = await import('@/lib/storage/blob');
-      const buffer = await generateImage(content);
-      imageUrl = await uploadBlob(buffer, `post-${targetDate}.png`);
+      const buffer = await generateImage(content, topic);
+      imageUrl = await uploadBlob(buffer, `post-${targetDate}-${Date.now()}.png`);
     } catch (err) {
       console.error('Image generation failed, continuing text-only:', err);
-      imageUrl = null;
     }
   }
 
   const [inserted] = await db
     .insert(posts)
     .values({
+      userId:      options.userId,
       topic,
       content,
       imageUrl,
-      status: 'DRAFT',
-      approvalMode: !autoPublish,
+      status:      'DRAFT',
       scheduledFor: targetDate,
     })
     .returning();
 
-  const result: GenerateResult = {
-    postId: inserted.id,
-    topic: inserted.topic,
-    content: inserted.content,
-    imageUrl: inserted.imageUrl,
-    status: PostStatus.DRAFT,
+  return {
+    postId:       inserted.id,
+    topic:        inserted.topic,
+    content:      inserted.content,
+    imageUrl:     inserted.imageUrl,
+    status:       PostStatus.DRAFT,
+    isScheduled:  inserted.isScheduled,
     scheduledFor: inserted.scheduledFor,
+    createdAt:    inserted.createdAt,
   };
-
-  if (autoPublish) {
-    const { publishPost } = await import('@/services/publish');
-    const publishResult = await publishPost(inserted.id);
-    result.status = publishResult.status;
-  }
-
-  return result;
-}
-
-export async function expireStaleDrafts(): Promise<void> {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  await db
-    .update(posts)
-    .set({
-      status: 'REJECTED',
-      errorMessage: 'Expired: no approval received within 7 days',
-    })
-    .where(
-      and(
-        eq(posts.status, 'DRAFT'),
-        lt(posts.createdAt, sevenDaysAgo)
-      )
-    );
 }
