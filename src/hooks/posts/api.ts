@@ -10,6 +10,10 @@ export interface FetchPostsParams {
   offset?: number;
 }
 
+export function fetchPost(id: string) {
+  return api.get<import('./types').Post>(`/api/posts/${id}`);
+}
+
 export function fetchPosts(params: FetchPostsParams = {}) {
   return api.get<PostsResponse>('/api/posts', {
     params: {

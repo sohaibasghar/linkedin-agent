@@ -70,6 +70,7 @@ async function request<T>(method: HttpMethod, path: string, options: RequestOpti
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
+    cache: 'no-store',
   });
 
   // Handle empty responses (204, etc.)

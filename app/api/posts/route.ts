@@ -47,22 +47,30 @@ export async function GET(request: NextRequest) {
     db.select({ count: sql<number>`count(*)` }).from(posts).where(where),
   ]);
 
-  return NextResponse.json({
-    posts: rows.map((p) => ({
-      postId:         p.id,
-      topic:          p.topic,
-      content:        p.content,
-      imageUrl:       p.imageUrl,
-      status:         p.status,
-      isScheduled:    p.isScheduled,
-      scheduledFor:   p.scheduledFor,
-      createdAt:      p.createdAt,
-      publishedAt:    p.publishedAt,
-      linkedInPostId: p.linkedInPostId,
-      errorMessage:   p.errorMessage,
-    })),
-    total:  Number(countResult[0]?.count ?? 0),
-    limit,
-    offset,
-  });
+  return NextResponse.json(
+    {
+      posts: rows.map((p) => ({
+        postId:         p.id,
+        topic:          p.topic,
+        content:        p.content,
+        imageUrl:       p.imageUrl,
+        status:         p.status,
+        isScheduled:    p.isScheduled,
+        scheduledFor:   p.scheduledFor,
+        createdAt:      p.createdAt,
+        publishedAt:    p.publishedAt,
+        linkedInPostId: p.linkedInPostId,
+        errorMessage:   p.errorMessage,
+      })),
+      total:  Number(countResult[0]?.count ?? 0),
+      limit,
+      offset,
+    },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    },
+  );
 }

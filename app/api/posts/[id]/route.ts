@@ -6,6 +6,38 @@ import { posts } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getCurrentUserId } from '@/lib/session';
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const userId = getCurrentUserId(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'UNAUTHENTICATED', message: 'Not logged in' }, { status: 401 });
+  }
+
+  const post = await db.query.posts.findFirst({
+    where: and(eq(posts.id, params.id), eq(posts.userId, userId)),
+  });
+
+  if (!post) {
+    return NextResponse.json({ error: 'POST_NOT_FOUND', message: `No post found with id: ${params.id}` }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    postId:         post.id,
+    topic:          post.topic,
+    content:        post.content,
+    imageUrl:       post.imageUrl,
+    status:         post.status,
+    isScheduled:    post.isScheduled,
+    scheduledFor:   post.scheduledFor,
+    createdAt:      post.createdAt,
+    publishedAt:    post.publishedAt,
+    linkedInPostId: post.linkedInPostId,
+    errorMessage:   post.errorMessage,
+  });
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }

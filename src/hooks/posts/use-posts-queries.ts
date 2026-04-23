@@ -1,7 +1,15 @@
 import { useApiQuery } from '@/hooks/use-api-query';
-import { fetchPosts } from './api';
+import { fetchPost, fetchPosts } from './api';
 import { postKeys } from './keys';
-import type { PostsResponse } from './types';
+import type { Post, PostsResponse } from './types';
+
+export function usePost(id: string) {
+  return useApiQuery<Post>({
+    queryKey: postKeys.detail(id),
+    queryFn: () => fetchPost(id),
+    enabled: !!id,
+  });
+}
 
 export const DRAFT_PAGE_SIZE = 5;
 

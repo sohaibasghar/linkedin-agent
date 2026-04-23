@@ -3,6 +3,7 @@ export { postKeys } from './keys';
 
 export {
   DRAFT_PAGE_SIZE,
+  usePost,
   useDrafts,
   useScheduledPosts,
   usePublishedPosts,

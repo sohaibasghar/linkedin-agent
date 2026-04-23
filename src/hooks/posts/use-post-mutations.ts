@@ -29,8 +29,7 @@ function useOptimisticDraftRemoval() {
   }
 
   function rollback(context: { previous: [unknown, PostsResponse | undefined][] } | undefined) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    context?.previous.forEach(([key, data]) => qc.setQueryData(key as any, data));
+    context?.previous.forEach(([key, data]) => qc.setQueryData(key as string[], data));
   }
 
   return { remove, rollback };
@@ -125,14 +124,15 @@ export function useMoveToDraft() {
 }
 
 /** Publish a post directly via /api/post (used by GeneratedPreview). */
-export function usePublishPost() {
+export function usePublishPost(options?: { onSuccess?: () => void }) {
   const invalidate = useInvalidateAll();
 
   return useMutation({
     mutationFn: (postId: string) => publishPost(postId),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Posted to LinkedIn!');
-      invalidate();
+      await invalidate();
+      options?.onSuccess?.();
     },
     onError: (e: Error) => toast.error(e.message),
   });
