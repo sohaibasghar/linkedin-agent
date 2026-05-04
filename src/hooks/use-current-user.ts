@@ -6,6 +6,7 @@ interface CurrentUser {
   name: string | null;
   email: string | null;
   avatarUrl: string | null;
+  publishTime: string;
 }
 
 export function useCurrentUser() {

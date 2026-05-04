@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
-    columns: { id: true, name: true, email: true, avatarUrl: true },
+    columns: { id: true, name: true, email: true, avatarUrl: true, publishTime: true },
   });
 
   if (!user) {
@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     name: user.name,
     email: user.email,
     avatarUrl: user.avatarUrl,
+    publishTime: user.publishTime,
   }, {
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate',

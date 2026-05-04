@@ -23,6 +23,7 @@ export const users = pgTable('users', {
   accessToken:    text('access_token'),
   refreshToken:   text('refresh_token'),
   tokenExpiresAt: timestamp('token_expires_at'),
+  publishTime:    text('publish_time').notNull().default('08:00'),
   createdAt:      timestamp('created_at').notNull().defaultNow(),
   updatedAt:      timestamp('updated_at').notNull().defaultNow(),
 });
