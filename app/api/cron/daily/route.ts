@@ -28,15 +28,17 @@ export async function GET(request: NextRequest) {
   }
 
   const today = todayUTC();
-  const now = new Date();
 
-  // Publish all scheduled drafts whose scheduled datetime has passed
+  // Publish all posts scheduled for today or earlier (any time of day)
+  const endOfToday = new Date();
+  endOfToday.setUTCHours(23, 59, 59, 999);
+
   const scheduledPosts = await db.query.posts.findMany({
     where: and(
       eq(posts.userId, user.id),
       eq(posts.status, 'DRAFT'),
       eq(posts.isScheduled, true),
-      lte(posts.scheduledFor, now),
+      lte(posts.scheduledFor, endOfToday),
     ),
   });
 

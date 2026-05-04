@@ -88,7 +88,7 @@ export function useSchedulePost(options?: { onSuccess?: (scheduledFor: string) =
       toast.error(err.message);
     },
     onSuccess: async (_, { scheduledFor }) => {
-      toast.success(`Scheduled for ${new Date(scheduledFor).toLocaleString()}.`);
+      toast.success(`Scheduled for ${new Date(scheduledFor).toLocaleDateString()}.`);
       await invalidate();
       options?.onSuccess?.(scheduledFor);
     },
