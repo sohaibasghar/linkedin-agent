@@ -53,7 +53,7 @@ export async function generatePost(options: GenerateOptions): Promise<GenerateRe
       content,
       imageUrl,
       status:      'DRAFT',
-      scheduledFor: targetDate,
+      scheduledFor: new Date(targetDate),
     })
     .returning();
 

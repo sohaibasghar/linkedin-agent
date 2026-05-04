@@ -81,7 +81,7 @@ export async function PATCH(
   }
 
   const updates: Partial<{
-    scheduledFor: string;
+    scheduledFor: Date;
     content: string;
     topic: string;
     isScheduled: boolean;
@@ -95,7 +95,7 @@ export async function PATCH(
     updates.isScheduled = false;
     updates.errorMessage = null;
   }
-  if (body.scheduledFor !== undefined) updates.scheduledFor = body.scheduledFor;
+  if (body.scheduledFor !== undefined) updates.scheduledFor = new Date(body.scheduledFor);
   if (body.content      !== undefined) updates.content      = body.content;
   if (body.topic        !== undefined) updates.topic        = body.topic;
   if (body.isScheduled  !== undefined) updates.isScheduled  = body.isScheduled;

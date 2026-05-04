@@ -11,7 +11,7 @@ function todayUTC(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   // Vercel cron sends: Authorization: Bearer <CRON_SECRET>
   // Manual/test calls may use: x-api-key: <CRON_SECRET>
   const authHeader = request.headers.get('authorization') ?? '';
@@ -28,14 +28,15 @@ export async function POST(request: NextRequest) {
   }
 
   const today = todayUTC();
+  const now = new Date();
 
-  // Publish all scheduled drafts due today or earlier
+  // Publish all scheduled drafts whose scheduled datetime has passed
   const scheduledPosts = await db.query.posts.findMany({
     where: and(
       eq(posts.userId, user.id),
       eq(posts.status, 'DRAFT'),
       eq(posts.isScheduled, true),
-      lte(posts.scheduledFor, today),
+      lte(posts.scheduledFor, now),
     ),
   });
 

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, date, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ export const posts = pgTable('posts', {
   isScheduled:    boolean('is_scheduled').notNull().default(false),
   linkedInPostId: text('linkedin_post_id'),
   errorMessage:   text('error_message'),
-  scheduledFor:   date('scheduled_for').notNull(),
+  scheduledFor:   timestamp('scheduled_for').notNull(),
   publishedAt:    timestamp('published_at'),
   createdAt:      timestamp('created_at').notNull().defaultNow(),
   updatedAt:      timestamp('updated_at').notNull().defaultNow(),

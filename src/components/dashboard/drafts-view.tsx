@@ -18,6 +18,7 @@ export function DraftsView({ excludeIds }: { excludeIds: Set<string> }) {
   const [editContent, setEditContent] = useState('');
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [scheduleDate, setScheduleDate] = useState(tomorrowLocal());
+  const [scheduleTime, setScheduleTime] = useState('09:00');
 
   const { data, isLoading } = useDrafts(page);
 
@@ -93,7 +94,7 @@ export function DraftsView({ excludeIds }: { excludeIds: Set<string> }) {
                 </button>
                 {!isScheduling ? (
                   <button
-                    onClick={() => { setSchedulingId(post.postId); setScheduleDate(tomorrowLocal()); setEditingId(null); }}
+                    onClick={() => { setSchedulingId(post.postId); setScheduleDate(tomorrowLocal()); setScheduleTime('09:00'); setEditingId(null); }}
                     className="text-[#707881] hover:text-[#005d8f] transition-colors p-1"
                     disabled={approveMutation.isPending}
                   >
@@ -103,12 +104,16 @@ export function DraftsView({ excludeIds }: { excludeIds: Set<string> }) {
               </div>
 
               {isScheduling && (
-                <div className="flex items-center gap-2">
-                  <Input type="date" value={scheduleDate} min={tomorrowLocal()} onChange={(e) => setScheduleDate(e.target.value)} className="w-40 h-8 text-sm" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Input type="date" value={scheduleDate} min={tomorrowLocal()} onChange={(e) => setScheduleDate(e.target.value)} className="w-36 h-8 text-sm" />
+                  <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-28 h-8 text-sm" />
                   <Button
                     size="sm"
                     className="bg-violet-600 text-white hover:bg-violet-700"
-                    onClick={() => scheduleMutation.mutate({ postId: post.postId, scheduledFor: scheduleDate })}
+                    onClick={() => {
+                      const localDt = new Date(`${scheduleDate}T${scheduleTime}:00`);
+                      scheduleMutation.mutate({ postId: post.postId, scheduledFor: localDt.toISOString() });
+                    }}
                     disabled={scheduleMutation.isPending}
                   >
                     {scheduleMutation.isPending ? 'Saving...' : 'Confirm'}

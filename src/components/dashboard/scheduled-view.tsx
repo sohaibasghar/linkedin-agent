@@ -31,7 +31,7 @@ export function ScheduledView({ excludeIds }: { excludeIds: Set<string> }) {
           <div className="flex justify-between items-center w-full">
             <div className="flex items-center gap-2 text-[#707881]">
               <IconSchedule className="text-blue-600" />
-              <span className="text-xs text-blue-600 font-medium">Publishes {post.scheduledFor}</span>
+              <span className="text-xs text-blue-600 font-medium">Publishes {new Date(post.scheduledFor).toLocaleString()}</span>
             </div>
             <div className="flex gap-3">
               <button

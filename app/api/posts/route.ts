@@ -37,8 +37,8 @@ export async function GET(request: NextRequest) {
   if (statusParam)            conditions.push(eq(posts.status, statusParam as PostStatus));
   if (isScheduledParam === 'true')  conditions.push(eq(posts.isScheduled, true));
   if (isScheduledParam === 'false') conditions.push(eq(posts.isScheduled, false));
-  if (fromParam)              conditions.push(gte(posts.scheduledFor, fromParam));
-  if (toParam)                conditions.push(lte(posts.scheduledFor, toParam));
+  if (fromParam)              conditions.push(gte(posts.scheduledFor, new Date(fromParam)));
+  if (toParam)                conditions.push(lte(posts.scheduledFor, new Date(toParam)));
 
   const where = and(...conditions);
 

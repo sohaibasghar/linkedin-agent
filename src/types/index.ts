@@ -17,7 +17,7 @@ export interface Post {
   errorMessage: string | null;
   createdAt: Date;
   publishedAt: Date | null;
-  scheduledFor: string; // DATE as YYYY-MM-DD string
+  scheduledFor: Date;
 }
 
 export interface PublishLog {
@@ -36,7 +36,7 @@ export interface GenerateResult {
   imageUrl: string | null;
   status: PostStatus;
   isScheduled: boolean;
-  scheduledFor: string;
+  scheduledFor: Date;
   createdAt: Date;
 }
 
