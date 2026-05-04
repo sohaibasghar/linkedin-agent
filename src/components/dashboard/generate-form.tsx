@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -66,7 +66,7 @@ export function GeneratedPreview({
         <h3 className="text-base font-semibold text-[#005d8f]">Generated Post</h3>
         {!done && (
           <button
-            onClick={() => { qc.invalidateQueries({ queryKey: postKeys.all, refetchType: 'all' }); onDone(draft.postId); }}
+            onClick={() => onDone(draft.postId)}
             className="text-[#707881] hover:text-[#1b1c1a] text-lg leading-none p-1"
           >
             &times;
@@ -158,66 +158,109 @@ export function GeneratedPreview({
 export function GenerateForm({ onGenerated }: { onGenerated: (draft: GeneratedDraft) => void }) {
   const [subject, setSubject] = useState('');
   const [withImage, setWithImage] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const generateMutation = useGeneratePost({ onSuccess: onGenerated });
 
+  function autoResize() {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (generateMutation.isPending) return;
+    generateMutation.mutate({ subject: subject.trim() || undefined, withImage });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as React.FormEvent);
+    }
+  }
+
   return (
-    <div className="bg-white border border-[#bfc7d1] p-6 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
-      <h2 className="text-lg font-semibold text-[#1b1c1a] mb-4">Generate New Post</h2>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          generateMutation.mutate({ subject: subject.trim() || undefined, withImage });
-        }}
-        className="flex flex-wrap items-end gap-3"
-      >
-        <div className="flex-1 min-w-[200px] space-y-1.5">
-          <Label htmlFor="subject" className="text-sm text-[#404850]">Subject</Label>
-          <Input
-            id="subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Topic to write about (leave blank for AI to choose)"
-            disabled={generateMutation.isPending}
-            className="bg-[#faf9f6] border-[#bfc7d1]"
-          />
-        </div>
-
-        <label className="flex items-center gap-2 cursor-pointer pb-0.5 shrink-0 text-sm text-[#404850]">
-          <input
-            type="checkbox"
-            checked={withImage}
-            onChange={(e) => setWithImage(e.target.checked)}
-            className="w-4 h-4 accent-[#0077b5] cursor-pointer"
-            disabled={generateMutation.isPending}
-          />
-          Add image
-        </label>
-
-        <button
-          type="submit"
+    <form onSubmit={handleSubmit}>
+      <div className={cn(
+        'bg-white rounded-2xl border transition-all shadow-[0_2px_16px_rgba(0,0,0,0.08)]',
+        generateMutation.isPending
+          ? 'border-[#0077b5]/40'
+          : 'border-[#e2e8ed] focus-within:border-[#0077b5]/60 focus-within:shadow-[0_4px_24px_rgba(0,119,181,0.12)]'
+      )}>
+        {/* Auto-growing textarea */}
+        <textarea
+          ref={textareaRef}
+          value={subject}
+          onChange={(e) => { setSubject(e.target.value); autoResize(); }}
+          onKeyDown={handleKeyDown}
+          placeholder="What do you want to write about? (Leave blank and AI will choose)"
           disabled={generateMutation.isPending}
-          className="text-sm font-semibold px-6 py-2.5 bg-[#0077b5] text-white rounded-lg shadow-sm hover:opacity-90 transition-all disabled:opacity-50 shrink-0"
-        >
-          {generateMutation.isPending ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+          rows={1}
+          className="w-full px-5 pt-4 pb-2 text-sm text-[#1b1c1a] placeholder-[#9ca3af] resize-none outline-none bg-transparent leading-relaxed disabled:opacity-60"
+          style={{ minHeight: '56px', maxHeight: '200px' }}
+        />
+
+        {/* Bottom toolbar */}
+        <div className="flex items-center justify-between px-4 pb-3 pt-1">
+          <button
+            type="button"
+            onClick={() => setWithImage((v) => !v)}
+            disabled={generateMutation.isPending}
+            className={cn(
+              'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all',
+              withImage
+                ? 'bg-[#0077b5]/10 text-[#0077b5] border-[#0077b5]/30'
+                : 'text-[#707881] border-transparent hover:bg-[#f3f2ef]'
+            )}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            {withImage ? 'Image on' : 'Add image'}
+          </button>
+
+          <button
+            type="submit"
+            disabled={generateMutation.isPending}
+            aria-label="Generate post"
+            className={cn(
+              'flex items-center justify-center w-9 h-9 rounded-xl transition-all',
+              generateMutation.isPending
+                ? 'bg-[#0077b5]/50 cursor-not-allowed'
+                : 'bg-[#0077b5] hover:bg-[#005d8f] shadow-sm active:scale-95'
+            )}
+          >
+            {generateMutation.isPending ? (
+              <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
               </svg>
-              Generating...
-            </span>
-          ) : (
-            'Generate Post'
-          )}
-        </button>
-      </form>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5 12 12 5 19 12"/>
+              </svg>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {generateMutation.isPending && (
+        <p className="mt-3 text-xs text-[#707881] text-center animate-pulse">
+          {withImage ? 'Generating post and image — this may take a moment…' : 'Generating your post…'}
+        </p>
+      )}
 
       {generateMutation.isError && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {(generateMutation.error as Error).message}
         </div>
       )}
-    </div>
+    </form>
   );
 }

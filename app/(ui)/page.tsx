@@ -39,8 +39,14 @@ export default function Dashboard() {
     qc.invalidateQueries({ queryKey: postKeys.all, refetchType: 'all' });
   }
 
-  function dismissDraft(postId: string) {
+  async function dismissDraft(postId: string) {
+    try {
+      await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete generated draft', err);
+    }
     setGeneratedDrafts((prev) => prev.filter((d) => d.postId !== postId));
+    qc.invalidateQueries({ queryKey: postKeys.all, refetchType: 'all' });
   }
 
   function handleSidebarNavigate(view: SidebarView) {

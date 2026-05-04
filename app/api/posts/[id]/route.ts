@@ -115,3 +115,28 @@ export async function PATCH(
     status:       updated.status,
   });
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const userId = getCurrentUserId(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'UNAUTHENTICATED', message: 'Not logged in' }, { status: 401 });
+  }
+
+  const { id } = params;
+
+  const post = await db.query.posts.findFirst({ where: and(eq(posts.id, id), eq(posts.userId, userId)) });
+  if (!post) {
+    return NextResponse.json({ error: 'POST_NOT_FOUND', message: `No post found with id: ${id}` }, { status: 404 });
+  }
+
+  if (post.status !== 'DRAFT') {
+    return NextResponse.json({ error: 'INVALID_STATUS', message: 'Only DRAFT posts can be deleted' }, { status: 409 });
+  }
+
+  await db.delete(posts).where(and(eq(posts.id, id), eq(posts.userId, userId)));
+
+  return NextResponse.json({ success: true });
+}

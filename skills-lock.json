@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "b527df4b7c4d4e8eace2162621756c84d41b90a7e1fa399bdf1e6a85c6a21db7"
     },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    },
     "writing-linkedin-posts": {
       "source": "jamesgray007/hoai-course",
       "sourceType": "github",

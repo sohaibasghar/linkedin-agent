@@ -12,7 +12,11 @@ function todayUTC(): string {
 }
 
 export async function POST(request: NextRequest) {
-  const apiKey = request.headers.get('x-api-key') ?? request.headers.get('X-API-Key');
+  // Vercel cron sends: Authorization: Bearer <CRON_SECRET>
+  // Manual/test calls may use: x-api-key: <CRON_SECRET>
+  const authHeader = request.headers.get('authorization') ?? '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const apiKey = bearerToken ?? request.headers.get('x-api-key') ?? request.headers.get('X-API-Key');
   if (apiKey !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Invalid API key' }, { status: 401 });
   }
@@ -25,8 +29,8 @@ export async function POST(request: NextRequest) {
 
   const today = todayUTC();
 
-  // Publish explicitly scheduled drafts due today
-  const scheduled = await db.query.posts.findFirst({
+  // Publish all scheduled drafts due today or earlier
+  const scheduledPosts = await db.query.posts.findMany({
     where: and(
       eq(posts.userId, user.id),
       eq(posts.status, 'DRAFT'),
@@ -35,16 +39,29 @@ export async function POST(request: NextRequest) {
     ),
   });
 
-  if (scheduled) {
-    try {
-      const result = await publishPost(scheduled.id);
-      return NextResponse.json({ triggered: true, date: today, postId: result.postId, status: result.status, source: 'scheduled_draft' });
-    } catch (err) {
-      console.error('Failed to publish scheduled draft:', err);
-    }
+  if (scheduledPosts.length > 0) {
+    const results = await Promise.allSettled(
+      scheduledPosts.map((post) => publishPost(post.id))
+    );
+
+    const published = results.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof publishPost>>> => r.status === 'fulfilled');
+    const failed    = results.filter((r) => r.status === 'rejected');
+
+    failed.forEach((r, i) => {
+      console.error(`Failed to publish scheduled post ${scheduledPosts[i]?.id}:`, (r as PromiseRejectedResult).reason);
+    });
+
+    return NextResponse.json({
+      triggered:  true,
+      date:       today,
+      source:     'scheduled_draft',
+      published:  published.length,
+      failed:     failed.length,
+      postIds:    published.map((r) => r.value.postId),
+    });
   }
 
-  // Generate fresh content
+  // No scheduled posts — generate fresh content
   try {
     const result = await generatePost({ userId: user.id, date: today });
     return NextResponse.json({ triggered: true, date: today, postId: result.postId, status: result.status, source: 'generated' });

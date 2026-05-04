@@ -41,12 +41,8 @@ export async function generatePost(options: GenerateOptions): Promise<GenerateRe
   let imageUrl: string | null = null;
 
   if (options.withImage) {
-    try {
-      const buffer = await generateImage(content, topic);
-      imageUrl = await uploadBlob(buffer, `post-${targetDate}-${Date.now()}.png`);
-    } catch (err) {
-      console.error('Image generation failed, continuing text-only:', err);
-    }
+    const buffer = await generateImage(content, topic);
+    imageUrl = await uploadBlob(buffer, `post-${targetDate}-${Date.now()}.png`);
   }
 
   const [inserted] = await db

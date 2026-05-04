@@ -27,7 +27,7 @@ export async function generateImage(content: string, topic?: string): Promise<Bu
     throw new Error('DALL-E 3 returned no image URL');
   }
 
-  const res = await fetch(imageUrl);
+  const res = await fetch(imageUrl, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Failed to download generated image: ${res.status}`);
   }
