@@ -28,10 +28,18 @@ async function getAccessToken(): Promise<string> {
     const cookieToken = cookieStore.get('li_token')?.value;
     if (cookieToken) return cookieToken;
   } catch {
-    // cookies() unavailable outside request context — fall through
+    // cookies() unavailable outside request context (e.g. cron) — fall through
   }
 
-  // 3. Env var (for cron / CI)
+  // 3. DB fallback for cron/server context where cookies are unavailable
+  try {
+    const user = await db.query.users.findFirst();
+    if (user?.accessToken) return user.accessToken;
+  } catch {
+    // DB unavailable — fall through
+  }
+
+  // 4. Env var (for CI)
   const envToken = process.env.LINKEDIN_ACCESS_TOKEN;
   if (envToken) return envToken;
 
