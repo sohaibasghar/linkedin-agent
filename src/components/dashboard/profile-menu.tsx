@@ -36,7 +36,6 @@ function SettingsModal({ publishTime, onClose }: { publishTime: string; onClose:
   const queryClient = useQueryClient();
   const tz = localTimezone();
   const utcValue = localToUtc(value);
-  const [utcH] = utcValue.split(':').map(Number);
 
   async function handleSave() {
     setSaving(true);
@@ -69,15 +68,6 @@ function SettingsModal({ publishTime, onClose }: { publishTime: string; onClose:
           onChange={(e) => setValue(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0077b5] mb-3"
         />
-
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 mb-4 text-xs text-amber-800 space-y-1">
-          <p className="font-semibold">Update vercel.json to apply</p>
-          <p>Set your cron schedule to match:</p>
-          <code className="block bg-amber-100 rounded px-2 py-1 font-mono text-xs select-all">
-            {`"schedule": "0 ${utcH} * * *"`}
-          </code>
-          <p className="text-amber-600">Then redeploy for the new time to take effect.</p>
-        </div>
 
         <div className="flex gap-2">
           <button
