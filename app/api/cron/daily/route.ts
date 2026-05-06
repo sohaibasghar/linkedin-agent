@@ -14,6 +14,7 @@ function todayUTC(): string {
 export async function GET(request: NextRequest) {
   // Vercel cron sends: Authorization: Bearer <CRON_SECRET>
   // Manual/test calls may use: x-api-key: <CRON_SECRET>
+  console.log("hittin cron", request.headers)
   const authHeader = request.headers.get('authorization') ?? '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   const apiKey = bearerToken ?? request.headers.get('x-api-key') ?? request.headers.get('X-API-Key');
